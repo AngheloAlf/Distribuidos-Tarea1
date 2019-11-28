@@ -2,7 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.util.Scanner;
 
-class client
+class Client
 {
 	private static int PORT = 50000;
 	private static String IP = "230.0.0.0";
@@ -27,6 +27,8 @@ class client
 
 		try {
 			// Aqui deberiamos obtener el client ID
+			String ID = "Client 1";
+			// Ya obtuvimos el ID desde el servidor
 
 			Listen listenThread = new Listen();
 			listenThread.start();
@@ -34,7 +36,6 @@ class client
 			String comando;
 			Scanner input = new Scanner(System.in);
 			while(true){
-				Thread.sleep(1000);
 				comando = input.nextLine();
 				sendUDPMessage(comando, IP);
 				System.out.println("Mensaje enviado");

@@ -1,11 +1,35 @@
 import java.io.*;
 import java.net.*;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-class server
+class Server
 {
 
 	private static int PORT = 50000; // Must be inside range [49152 - 65535]
 	private static String IP = "230.0.0.0";
+	private static Queue<Cancion> queue = new LinkedList<>();
+	volatile private static String status = "running"; //stopped, paused or playing
+	volatile private static String nowPlaying = null;
+	volatile private static Integer timeLeft = 0;
+	private static Integer totalSongTime = 0;
+
+	private static Pattern clientPattern = Pattern.compile("Client.*", Pattern.CASE_INSENSITIVE);
+	private static Pattern pausePattern = Pattern.compile("Client.*_PAUSE_.*", Pattern.CASE_INSENSITIVE);
+	private static Pattern keewihPattern = Pattern.compile("Client.*_KEEWIH_.*", Pattern.CASE_INSENSITIVE);
+	private static Pattern listPattern = Pattern.compile("Client.*_LIST_.*", Pattern.CASE_INSENSITIVE);
+	private static Pattern stopPattern = Pattern.compile("Client.*_STOP_.*", Pattern.CASE_INSENSITIVE);
+	private static Pattern nextPattern = Pattern.compile("Client.*_NEXT_.*", Pattern.CASE_INSENSITIVE);
+	private static Pattern historyPattern = Pattern.compile("Client.*_HISTORY_.*", Pattern.CASE_INSENSITIVE);
+
+	private static Pattern playPattern = Pattern.compile(".*?_PLAY_(.*?)_(.*?)_(.*)", Pattern.CASE_INSENSITIVE);
+	private static Pattern queuePattern = Pattern.compile(".*?_KEEWIH_(.*?_.*?)_(.*?)", Pattern.CASE_INSENSITIVE);
+	private static Pattern jumpPattern = Pattern.compile(".*?_JUMP_(\\d+)_(.*?)", Pattern.CASE_INSENSITIVE);
+
+
+	private static Cancion cancion = new Cancion();
 
 	public static void sendUDPMessage(String message, String ipAddress) throws Exception
 	{
@@ -22,12 +46,95 @@ class server
 		if(args.length < 1) {
 			System.out.println("ERROR: Debes especificar la IP!");
 			System.out.println("Uso: java server <ip multicast>");
+		} else {
+			IP = args[0];
 		}
 		try {
-			sendUDPMessage("Hola Anghelo", IP);
-		} catch (Exception e) {
+			
+			byte[] buffer = new byte[1024];
+
+			MulticastSocket socket = new MulticastSocket(PORT);
+			InetAddress group = InetAddress.getByName(IP);
+			socket.joinGroup(group);
+
+			Thread singer = new Thread() {
+				public void run() {
+					while(true) {
+						try {
+							Thread.sleep(1000);
+							if(status.equals("running")) {
+								sendUDPMessage(nowPlaying + "_" + timeLeft.toString(), IP);
+							} else {
+								sendUDPMessage(status, IP);
+							}
+							timeLeft--;
+						} catch (Exception e) {
+							System.out.println("Se ha hallado un error en el cantador:");
+							System.out.println(e.toString());
+						}
+					}
+				}
+			};
+			singer.start();
+			while(true){
+				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+				socket.receive(packet);
+				String message = new String(packet.getData(), packet.getOffset(), packet.getLength());
+				if(clientPattern.matcher(message).matches()) { // es un mensaje del cliente
+					System.out.print("Mensaje recibido por el servidor: ");
+					System.out.println(message);
+					if(playPattern.matcher(message).matches()) {
+						System.out.println("ALOHA");
+						while(queue.size() != 0) queue.remove(); // vaciamos la cola (Esta bien vaciarla?)
+						System.out.println("ALO1");
+						nowPlaying = playPattern.matcher(message).group(1); // Parece que esto de los grupos me tira error
+						System.out.println("ALO2");
+						timeLeft = Integer.parseInt(playPattern.matcher(message).group(2));
+						totalSongTime = timeLeft;
+						status = "playing";
+						System.out.println("ALO3");
+					} else if(stopPattern.matcher(message).matches()) {
+						while(queue.size() != 0) queue.remove(); // vaciamos la cola (Esta bien vaciarla?)
+						nowPlaying = null;
+						timeLeft = 0;
+						totalSongTime = 0;
+						status = "stopped";
+					} else if(pausePattern.matcher(message).matches()) {
+						status = "paused";
+					} else if(keewihPattern.matcher(message).matches()) {
+						cancion.nombre = queuePattern.matcher(message).group(1);
+						cancion.timeLeft = Integer.parseInt(queuePattern.matcher(message).group(2));
+						queue.add(cancion);
+					} else if(listPattern.matcher(message).matches()) {
+						sendUDPMessage("Esta es la lista de canciones", IP); // Mostrar la lista de canciones
+					} else if(nextPattern.matcher(message).matches()) {
+						cancion = queue.remove();
+						nowPlaying = cancion.nombre;
+						timeLeft = cancion.timeLeft;
+						totalSongTime = cancion.timeLeft;
+					} else if(jumpPattern.matcher(message).matches()) {
+						Integer number = Integer.parseInt(jumpPattern.matcher(message).group(1));
+						if(number == 0) {
+							timeLeft = totalSongTime;
+						} else {
+							if(number < 0){
+								number = queue.size() + 1 - number;
+							}
+							while(number-- != 0) {
+								cancion = queue.remove();
+								nowPlaying = cancion.nombre;
+								timeLeft = cancion.timeLeft;
+							}
+						}
+					} else if(historyPattern.matcher(message).matches()) {
+						sendUDPMessage("Esta es la lista de comandos", IP);
+					}
+				}
+			}
+		} catch(Exception e) {
 			System.out.println(e.toString());
-		} 
+		}
+		
 		System.out.println("Hola Alf");
 	}
 }

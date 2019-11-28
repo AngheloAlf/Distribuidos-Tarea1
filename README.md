@@ -15,3 +15,6 @@ Para ejecutar:
 
 Para limpiar:
 	make clena
+
+Notas de los mensajes:
+	Las duraciones de las canciones siempre se envian en segundos.
