@@ -11,13 +11,16 @@ class Server
 
 	private static int PORT = 50000; // Must be inside range [49152 - 65535]
 	private static String IP = "230.0.0.0";
+
 	private static Queue<Cancion> queue = new LinkedList<>();
-	volatile private static String status = "playing"; //stopped, paused or playing
+	volatile private static String status = "stopped"; //stopped, paused or playing
 	volatile private static String nowPlaying = null;
 	volatile private static Integer timeLeft = 0;
 	private static Integer totalSongTime = 0;
+	private static Integer commandID = 0;
+	private static LinkedList<String> history = new LinkedList<String>();
 
-	private static Pattern clientPattern = Pattern.compile("Client.*", Pattern.CASE_INSENSITIVE);
+	private static Pattern clientPattern = Pattern.compile("Client.*?_(.*)", Pattern.CASE_INSENSITIVE);
 	private static Pattern pausePattern = Pattern.compile("Client.*_PAUSE_.*", Pattern.CASE_INSENSITIVE);
 	private static Pattern listPattern = Pattern.compile("Client.*_LIST_.*", Pattern.CASE_INSENSITIVE);
 	private static Pattern stopPattern = Pattern.compile("Client.*_STOP_.*", Pattern.CASE_INSENSITIVE);
@@ -29,6 +32,7 @@ class Server
 	private static Pattern jumpPattern = Pattern.compile(".*?_JUMP_(\\d+)_(.*?)", Pattern.CASE_INSENSITIVE);
 
 
+	private static Queue<Cancion> auxQueue = new LinkedList<>();
 	private static Cancion cancion;
 
 	public static void sendUDPMessage(String message, String ipAddress) throws Exception
@@ -66,7 +70,11 @@ class Server
 								sendUDPMessage(nowPlaying + "_" + timeLeft.toString(), IP);
 								timeLeft--;
 							} else {
-								sendUDPMessage(status, IP);
+								if(status.equals("paused")) {
+									sendUDPMessage("Reproduccion pausada. Ingrese 'PAUSE' para reanudar la reproduccion", IP);
+								} else {
+									sendUDPMessage(status, IP);
+								}
 							}
 							if(timeLeft == 0) {
 								try {
@@ -89,24 +97,21 @@ class Server
 				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 				socket.receive(packet);
 				String message = new String(packet.getData(), packet.getOffset(), packet.getLength());
-				if(clientPattern.matcher(message).matches()) { // es un mensaje del cliente
-					System.out.print("Mensaje recibido por el servidor: ");
-					System.out.println(message);
+				Matcher clientMatch = clientPattern.matcher(message);
+				if(clientMatch.matches()) { // es un mensaje del cliente
+					sendUDPMessage("CCast_" + clientMatch.group(1), IP);
+					history.push(message);
 					Matcher playMatch = playPattern.matcher(message);
 					Matcher keewihMatch = keewihPattern.matcher(message);
 					Matcher jumpMatch = jumpPattern.matcher(message);
 					if(playMatch.matches()) {
-						System.out.println("ALOHA");
 						while(queue.size() != 0) queue.remove(); // vaciamos la cola (Esta bien vaciarla?)
-						System.out.println("ALO1");
 						nowPlaying = playMatch.group(1); // Parece que esto de los grupos me tira error
-						System.out.println("ALO2");
 						timeLeft = Integer.parseInt(playMatch.group(2));
 						totalSongTime = timeLeft;
 						status = "playing";
-						System.out.println("ALO3");
 					} else if(stopPattern.matcher(message).matches()) {
-						while(queue.size() != 0) queue.remove(); // vaciamos la cola (Esta bien vaciarla?)
+						while(queue.size() != 0) queue.remove();
 						nowPlaying = null;
 						timeLeft = 0;
 						totalSongTime = 0;
@@ -123,6 +128,14 @@ class Server
 						cancion.timeLeft = Integer.parseInt(keewihMatch.group(2));
 						queue.add(cancion);
 					} else if(listPattern.matcher(message).matches()) {
+						for(Integer i = 1; queue.size() != 0; i++) {
+							cancion = queue.remove();
+							sendUDPMessage("Cancion " + i.toString() + ": " + cancion.nombre + " - largo: " + cancion.timeLeft, IP);
+							auxQueue.add(cancion);
+						}
+						while(auxQueue.size() != 0) {
+							queue.add(queue.remove());
+						}
 						sendUDPMessage("Esta es la lista de canciones", IP); // Mostrar la lista de canciones
 					} else if(nextPattern.matcher(message).matches()) {
 						cancion = queue.remove();
@@ -144,7 +157,10 @@ class Server
 							}
 						}
 					} else if(historyPattern.matcher(message).matches()) {
-						sendUDPMessage("Esta es la lista de comandos", IP); // Mostrar la lista de comandos (que aun hay que construir)
+						sendUDPMessage("Esta es la lista de comandos", IP);
+						for(Integer i = 0; i < history.size(); i++) {
+							sendUDPMessage(history.get(i) + "_ID: " + i.toString(), IP);
+						}
 					}
 				}
 			}
