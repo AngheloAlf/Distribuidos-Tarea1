@@ -17,9 +17,9 @@ class Listen extends Thread
 			MulticastSocket socket = new MulticastSocket(PORT);
 			InetAddress group = InetAddress.getByName(IP);
 			socket.joinGroup(group);
+			socket.setSoTimeout(1000*5); // Esperar hasta 5 segundos entre mensajes.
 
 			while(true){
-				Thread.sleep(1000);
 				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 				socket.receive(packet);
 				String message = new String(packet.getData(), packet.getOffset(), packet.getLength());
@@ -27,6 +27,9 @@ class Listen extends Thread
 					System.out.println(message);
 				}
 			}
+		} catch(SocketTimeoutException e){
+			System.out.println("Se supero el tiempo de espera.");
+			System.out.println("Presione enter para salir.");
 		} catch(Exception e) {
 			System.out.println(e.toString());
 		}

@@ -23,11 +23,11 @@ class Client
 			System.out.println("ERROR: Debes especificar la IP!");
 			System.out.println("Uso: java client <ip multicast>");
 		}
-		byte[] buffer = new byte[1024];
+		// byte[] buffer = new byte[1024];
 
 		try {
 			// Aqui deberiamos obtener el client ID
-			String ID = "Client 1";
+			String ID = "Client1";
 			// Ya obtuvimos el ID desde el servidor
 
 			Listen listenThread = new Listen();
@@ -35,11 +35,12 @@ class Client
 
 			String comando;
 			Scanner input = new Scanner(System.in);
-			while(true){
+			while(listenThread.isAlive()){
 				comando = input.nextLine();
 				sendUDPMessage(comando, IP);
 				System.out.println("Mensaje enviado");
 			}
+			input.close();
 		} catch(Exception e) {
 			System.out.println(e.toString());
 		}
