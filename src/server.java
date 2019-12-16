@@ -99,6 +99,7 @@ class Server
 				String message = new String(packet.getData(), packet.getOffset(), packet.getLength());
 				Matcher clientMatch = clientPattern.matcher(message);
 				if(clientMatch.matches()) { // es un mensaje del cliente
+					System.out.println("Recv << " + message);
 					sendUDPMessage("CCast_" + clientMatch.group(1), IP);
 					history.push(message);
 					Matcher playMatch = playPattern.matcher(message);
@@ -128,15 +129,16 @@ class Server
 						cancion.timeLeft = Integer.parseInt(keewihMatch.group(2));
 						queue.add(cancion);
 					} else if(listPattern.matcher(message).matches()) {
+						sendUDPMessage("Esta es la lista de canciones en cola:", IP); // Mostrar la lista de canciones
 						for(Integer i = 1; queue.size() != 0; i++) {
 							cancion = queue.remove();
 							sendUDPMessage("Cancion " + i.toString() + ": " + cancion.nombre + " - largo: " + cancion.timeLeft, IP);
 							auxQueue.add(cancion);
 						}
 						while(auxQueue.size() != 0) {
-							queue.add(queue.remove());
+							queue.add(auxQueue.remove());
 						}
-						sendUDPMessage("Esta es la lista de canciones", IP); // Mostrar la lista de canciones
+						sendUDPMessage("Fin lista de canciones.", IP);
 					} else if(nextPattern.matcher(message).matches()) {
 						cancion = queue.remove();
 						nowPlaying = cancion.nombre;
@@ -168,6 +170,6 @@ class Server
 			System.out.println(e.toString());
 		}
 		
-		System.out.println("Hola Alf");
+		System.out.println("Hola Vicente");
 	}
 }
