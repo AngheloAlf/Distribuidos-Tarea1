@@ -13,24 +13,26 @@ class Listen extends Thread
 	{
 		byte[] buffer = new byte[1024];
 		try {
-
 			MulticastSocket socket = new MulticastSocket(PORT);
 			InetAddress group = InetAddress.getByName(IP);
 			socket.joinGroup(group);
 			socket.setSoTimeout(1000*5); // Esperar hasta 5 segundos entre mensajes.
-
-			while(true){
-				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-				socket.receive(packet);
-				String message = new String(packet.getData(), packet.getOffset(), packet.getLength());
-				if(!clientPattern.matcher(message).matches()) { // es un mensaje del servidor y no del cliente
-					System.out.println(message);
-				}
-			}
-		} catch(SocketTimeoutException e){
-			System.out.println("Se supero el tiempo de espera.");
-			System.out.println("Presione enter para salir.");
-		} catch(Exception e) {
+            try {
+                while(true){
+                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(packet);
+                    String message = new String(packet.getData(), packet.getOffset(), packet.getLength());
+                    if(!clientPattern.matcher(message).matches()) { // es un mensaje del servidor y no del cliente
+                        System.out.println(message);
+                    }
+                }
+            } catch(SocketTimeoutException e){
+                System.out.println("Se supero el tiempo de espera.");
+                System.out.println("Presione enter para salir.");
+            }
+            socket.close();
+        }
+        catch(Exception e) {
 			System.out.println(e.toString());
 		}
 
