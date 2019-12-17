@@ -1,4 +1,5 @@
 default:
+	javac -d . src/MulticastHelper.java
 	javac -d . src/Cancion.java
 	javac -d . src/listen.java
 	javac -d . src/server.java

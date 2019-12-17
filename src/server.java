@@ -1,8 +1,6 @@
-import java.io.*;
-import java.net.*;
 import java.util.LinkedList;
-import java.util.Queue;
 import java.util.NoSuchElementException;
+import java.util.Queue;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -18,6 +16,7 @@ class Server
 	volatile private static Integer timeLeft = 0;
 	private static Integer totalSongTime = 0;
 	private static Integer commandID = 0;
+	private static Integer nextClientId = 1;
 	private static LinkedList<String> history = new LinkedList<String>();
 
 	private static Pattern clientPattern = Pattern.compile("Client.*?_(.*)", Pattern.CASE_INSENSITIVE);
@@ -31,19 +30,11 @@ class Server
 	private static Pattern keewihPattern = Pattern.compile(".*?_KEEWIH_(.*?)_(\\d+?)_(.*?)", Pattern.CASE_INSENSITIVE);
 	private static Pattern jumpPattern = Pattern.compile(".*?_JUMP_(\\d+)_(.*?)", Pattern.CASE_INSENSITIVE);
 
+	private static Pattern connectPattern = Pattern.compile("^CONNECT$", Pattern.CASE_INSENSITIVE);
+	private static Pattern disconnectPattern = Pattern.compile("^Client([0-9]+)_EXIT_ID([0-9]+)$", Pattern.CASE_INSENSITIVE);
 
 	private static Queue<Cancion> auxQueue = new LinkedList<>();
 	private static Cancion cancion;
-
-	public static void sendUDPMessage(String message, String ipAddress) throws Exception
-	{
-		DatagramSocket socket = new DatagramSocket();
-		InetAddress group = InetAddress.getByName(ipAddress);
-		byte[] messageBytes = message.getBytes();
-		DatagramPacket packet = new DatagramPacket(messageBytes, messageBytes.length, group, PORT);
-		socket.send(packet);
-		socket.close();
-	}
 
 	public static void main(String args[])
 	{
@@ -54,26 +45,21 @@ class Server
 			IP = args[0];
 		}
 		try {
-			
-			byte[] buffer = new byte[1024];
 
-			MulticastSocket socket = new MulticastSocket(PORT);
-			InetAddress group = InetAddress.getByName(IP);
-			socket.joinGroup(group);
-
+			MulticastHelper socket = new MulticastHelper(IP, PORT);
 			Thread singer = new Thread() {
 				public void run() {
 					while(true) {
 						try {
 							Thread.sleep(1000);
 							if(status.equals("playing")) {
-								sendUDPMessage(nowPlaying + "_" + timeLeft.toString(), IP);
+								socket.send(nowPlaying + "_" + timeLeft.toString());
 								timeLeft--;
 							} else {
 								if(status.equals("paused")) {
-									sendUDPMessage("Reproduccion pausada. Ingrese 'PAUSE' para reanudar la reproduccion", IP);
+									socket.send("Reproduccion pausada. Ingrese 'PAUSE' para reanudar la reproduccion");
 								} else {
-									sendUDPMessage(status, IP);
+									socket.send(status);
 								}
 							}
 							if(timeLeft == 0) {
@@ -93,18 +79,17 @@ class Server
 				}
 			};
 			singer.start();
-			while(true){
-				DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-				socket.receive(packet);
-				String message = new String(packet.getData(), packet.getOffset(), packet.getLength());
+			while(true) {
+				String message = socket.receive();
 				Matcher clientMatch = clientPattern.matcher(message);
 				if(clientMatch.matches()) { // es un mensaje del cliente
 					System.out.println("Recv << " + message);
-					sendUDPMessage("CCast_" + clientMatch.group(1), IP);
+					socket.send("CCast_" + clientMatch.group(1));
 					history.push(message);
 					Matcher playMatch = playPattern.matcher(message);
 					Matcher keewihMatch = keewihPattern.matcher(message);
 					Matcher jumpMatch = jumpPattern.matcher(message);
+					Matcher disconnectMatch = disconnectPattern.matcher(message);
 					if(playMatch.matches()) {
 						while(queue.size() != 0) queue.remove(); // vaciamos la cola (Esta bien vaciarla?)
 						nowPlaying = playMatch.group(1); // Parece que esto de los grupos me tira error
@@ -129,16 +114,16 @@ class Server
 						cancion.timeLeft = Integer.parseInt(keewihMatch.group(2));
 						queue.add(cancion);
 					} else if(listPattern.matcher(message).matches()) {
-						sendUDPMessage("Esta es la lista de canciones en cola:", IP); // Mostrar la lista de canciones
+						socket.send("Esta es la lista de canciones en cola:");
 						for(Integer i = 1; queue.size() != 0; i++) {
 							cancion = queue.remove();
-							sendUDPMessage("Cancion " + i.toString() + ": " + cancion.nombre + " - largo: " + cancion.timeLeft, IP);
+							socket.send("Cancion " + i.toString() + ": " + cancion.nombre + " - largo: " + cancion.timeLeft);
 							auxQueue.add(cancion);
 						}
 						while(auxQueue.size() != 0) {
 							queue.add(auxQueue.remove());
 						}
-						sendUDPMessage("Fin lista de canciones.", IP);
+						socket.send("Fin lista de canciones.");
 					} else if(nextPattern.matcher(message).matches()) {
 						cancion = queue.remove();
 						nowPlaying = cancion.nombre;
@@ -152,21 +137,36 @@ class Server
 							if(number < 0){
 								number = queue.size() + 1 - number;
 							}
-							while(number-- != 0) {
-								cancion = queue.remove();
-								nowPlaying = cancion.nombre;
-								timeLeft = cancion.timeLeft;
+							while(number-- > 0) {
+								if(queue.size() > 0){
+									cancion = queue.remove();
+									nowPlaying = cancion.nombre;
+									timeLeft = cancion.timeLeft;
+								}
+								else{
+									status = "stopped";
+								}
 							}
 						}
 					} else if(historyPattern.matcher(message).matches()) {
-						sendUDPMessage("Esta es la lista de comandos", IP);
+						socket.send("Esta es la lista de comandos");
 						for(Integer i = 0; i < history.size(); i++) {
-							sendUDPMessage(history.get(i) + "_ID: " + i.toString(), IP);
+							socket.send(history.get(i) + "_ID: " + i.toString());
 						}
+						socket.send("Fin lista de comandos.");
+					} else if(disconnectMatch.matches()) {
+						String clientId = disconnectMatch.group(1);
+						String packetId = disconnectMatch.group(2);
 					}
+				} else if(connectPattern.matcher(message).matches()) {
+					System.out.println("Recv << " + message);
+					socket.send("CONNECT_CLIENT" + nextClientId++);
 				}
 			}
+
+			socket.close();
 		} catch(Exception e) {
+			e.printStackTrace(System.err);
 			System.out.println(e.toString());
 		}
 		
