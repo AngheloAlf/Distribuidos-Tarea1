@@ -3,6 +3,7 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 
 class MulticastHelper
 {
@@ -37,7 +38,7 @@ class MulticastHelper
         this.socket.setSoTimeout(miliseconds);
     }
 
-    String receive() throws IOException
+    String receive() throws IOException, SocketTimeoutException
     {
         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
         this.socket.receive(packet);

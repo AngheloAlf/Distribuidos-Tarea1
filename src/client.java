@@ -1,3 +1,5 @@
+import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.Scanner;
 
 class Client
@@ -16,26 +18,41 @@ class Client
 			MulticastHelper socket = new MulticastHelper(IP, PORT);
 			socket.setTimeout(1000*5); // Esperar hasta 5 segundos entre mensajes.
 
+			System.out.println("Conectando...");
 			Listen listenThread = new Listen(socket);
 			listenThread.start();
 
-			// Aqui deberiamos obtener el client ID
-			String ID = "Client1";
-			// Ya obtuvimos el ID desde el servidor
+			String ID = "Client" + listenThread.clientId;
+			System.out.println("Tu ID es <" + listenThread.clientId + ">");
 
-			String comando;
 			Scanner input = new Scanner(System.in);
-			while(listenThread.isAlive()){
-				comando = input.nextLine();
-				socket.send(comando);
-				System.out.println("Mensaje enviado");
+			Boolean keepRunning = true;
+			Integer commandId = 1;
+			try {
+				while(keepRunning && listenThread.isAlive()) {
+					String comando = input.nextLine();
+					socket.send(ID + "_" + comando + "_ID" + commandId++);
+					System.out.println("Mensaje enviado");
+					if(comando.equalsIgnoreCase("EXIT")){
+						listenThread.keepRuning = false;
+						keepRunning = false;
+					}
+				}
+			} catch(IOException e) {
+				e.printStackTrace(System.err);
+				System.out.println(e.toString());
+			} finally {
+				input.close();
 			}
-			input.close();
+
 			socket.close();
+		} catch(SocketTimeoutException e) {
+			System.out.println("Se supero el tiempo de espera.");
 		} catch(Exception e) {
 			e.printStackTrace(System.err);
 			System.out.println(e.toString());
 		}
 
+		System.out.println("Saliendo.");
 	}
 }
