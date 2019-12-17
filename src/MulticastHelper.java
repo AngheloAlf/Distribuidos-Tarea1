@@ -27,7 +27,9 @@ class MulticastHelper
 
     void close()
     {
-        this.socket.close();
+        if(!this.socket.isClosed()){
+            this.socket.close();
+        }
     }
 
     void setTimeout(Integer miliseconds) throws SocketException
