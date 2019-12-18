@@ -6,7 +6,7 @@ class Singer extends Thread
 	volatile protected MulticastHelper socket;
 	volatile protected Queue<Song> queue;
 
-	volatile public Boolean keepRuning = true;
+	volatile public Boolean keepRunning = true;
 	protected String status;
 	protected Song actualSong;
 
@@ -21,7 +21,7 @@ class Singer extends Thread
 
 	public void run()
 	{
-		while (keepRuning) {
+		while (keepRunning) {
 			try {
 				Thread.sleep(1000);
 				if (status.equals("playing")) {
@@ -51,6 +51,7 @@ class Singer extends Thread
 				e.printStackTrace(System.err);
 				System.out.println("Se ha hallado un error en el cantador:");
 				System.out.println(e.toString());
+				keepRunning = false;
 			}
 		}
 	}
