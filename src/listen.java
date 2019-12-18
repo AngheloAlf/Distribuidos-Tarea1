@@ -1,16 +1,12 @@
 import java.io.IOException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 class Listen extends Thread
 {
-	public String clientId = null;
+	volatile public String clientId = null;
 	volatile protected MulticastHelper socket;
 	volatile public Boolean keepRuning = true;
-	private static Pattern clientPattern = Pattern.compile("^Client([0-9]+)_.*$", Pattern.CASE_INSENSITIVE);
-	private static Pattern connectIdPattern = Pattern.compile("^CONNECT_CLIENT([0-9]+)$", Pattern.CASE_INSENSITIVE);
 
 	Listen(MulticastHelper socket) throws IOException, SocketTimeoutException
 	{
@@ -21,9 +17,11 @@ class Listen extends Thread
 	public void run() 
 	{
 		try {
-			while(keepRuning){
+			while (keepRuning) {
 				String message = socket.receive();
-				if(!clientPattern.matcher(message).matches()) { // es un mensaje del servidor y no de algun cliente
+				MessageMatcher msgMatcher = new MessageMatcher(message);
+				// TODO: cambiar a msgMatcher.isFromServer()
+				if (!msgMatcher.isFromClient()) {
 					System.out.println(message);
 				}
 			}
@@ -45,11 +43,11 @@ class Listen extends Thread
 	protected void connectAndGetId() throws IOException, SocketTimeoutException
 	{
 		socket.send("CONNECT");
-		while(clientId == null){
-			String message = socket.receive();
-			Matcher matcher = connectIdPattern.matcher(message);
-			if(matcher.matches()){
-				clientId = matcher.group(1);
+		while (clientId == null) {
+			MessageMatcher msgMatcher = new MessageMatcher(socket.receive());
+			CommandData cmdData = msgMatcher.serverConnectId();
+			if (cmdData != null) {
+				clientId = cmdData.getArgs()[0];
 			}
 		}
 	}

@@ -1,12 +1,9 @@
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.Queue;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 class Server
 {
-
 	private static int PORT = 50000; // Must be inside range [49152 - 65535]
 	private static String IP = "230.0.0.0";
 
@@ -18,20 +15,6 @@ class Server
 	private static Integer commandID = 0;
 	private static Integer nextClientId = 1;
 	private static LinkedList<String> history = new LinkedList<String>();
-
-	private static Pattern clientPattern = Pattern.compile("Client.*?_(.*)", Pattern.CASE_INSENSITIVE);
-	private static Pattern pausePattern = Pattern.compile("Client.*_PAUSE_.*", Pattern.CASE_INSENSITIVE);
-	private static Pattern listPattern = Pattern.compile("Client.*_LIST_.*", Pattern.CASE_INSENSITIVE);
-	private static Pattern stopPattern = Pattern.compile("Client.*_STOP_.*", Pattern.CASE_INSENSITIVE);
-	private static Pattern nextPattern = Pattern.compile("Client.*_NEXT_.*", Pattern.CASE_INSENSITIVE);
-	private static Pattern historyPattern = Pattern.compile("Client.*_HISTORY_.*", Pattern.CASE_INSENSITIVE);
-
-	private static Pattern playPattern = Pattern.compile(".*?_PLAY_(.*?)_(\\d+?)_(.*)", Pattern.CASE_INSENSITIVE);
-	private static Pattern keewihPattern = Pattern.compile(".*?_KEEWIH_(.*?)_(\\d+?)_(.*?)", Pattern.CASE_INSENSITIVE);
-	private static Pattern jumpPattern = Pattern.compile(".*?_JUMP_(\\d+)_(.*?)", Pattern.CASE_INSENSITIVE);
-
-	private static Pattern connectPattern = Pattern.compile("^CONNECT$", Pattern.CASE_INSENSITIVE);
-	private static Pattern disconnectPattern = Pattern.compile("^Client([0-9]+)_EXIT_ID([0-9]+)$", Pattern.CASE_INSENSITIVE);
 
 	private static Queue<Cancion> auxQueue = new LinkedList<>();
 	private static Cancion cancion;
@@ -79,88 +62,100 @@ class Server
 				}
 			};
 			singer.start();
-			while(true) {
+			while (true) {
 				String message = socket.receive();
-				Matcher clientMatch = clientPattern.matcher(message);
-				if(clientMatch.matches()) { // es un mensaje del cliente
-					System.out.println("Recv << " + message);
-					socket.send("CCast_" + clientMatch.group(1));
-					history.push(message);
-					Matcher playMatch = playPattern.matcher(message);
-					Matcher keewihMatch = keewihPattern.matcher(message);
-					Matcher jumpMatch = jumpPattern.matcher(message);
-					Matcher disconnectMatch = disconnectPattern.matcher(message);
-					if(playMatch.matches()) {
-						while(queue.size() != 0) queue.remove(); // vaciamos la cola (Esta bien vaciarla?)
-						nowPlaying = playMatch.group(1); // Parece que esto de los grupos me tira error
-						timeLeft = Integer.parseInt(playMatch.group(2));
-						totalSongTime = timeLeft;
+				MessageMatcher msgMatcher = new MessageMatcher(message);
+
+				if (!msgMatcher.isFromClient()) {
+					continue;
+				}
+
+				System.out.println("Recv << " + message);
+				// socket.send("CCast_" + clientMatch.group(1));
+				history.push(message);
+
+				CommandData playData = msgMatcher.clientPlay();
+				CommandData queueAddData = msgMatcher.clientQueueAdd();
+				CommandData jumpData = msgMatcher.clientJump();			
+	
+				if (msgMatcher.clientConnect() != null) {
+					socket.send("CONNECT_CLIENT" + nextClientId++);
+				} else if (playData != null) {
+					String[] cmdArgs = playData.getArgs();
+					nowPlaying = cmdArgs[0];
+					timeLeft = Integer.parseInt(cmdArgs[1]);
+					totalSongTime = timeLeft;
+					status = "playing";
+				} else if (msgMatcher.clientStop() != null) {
+					while(queue.size() != 0) queue.remove();
+					nowPlaying = null;
+					timeLeft = 0;
+					totalSongTime = 0;
+					status = "stopped";
+				} else if (msgMatcher.clientPause() != null) {
+					if (status.equals("paused")) {
 						status = "playing";
-					} else if(stopPattern.matcher(message).matches()) {
-						while(queue.size() != 0) queue.remove();
-						nowPlaying = null;
-						timeLeft = 0;
-						totalSongTime = 0;
-						status = "stopped";
-					} else if(pausePattern.matcher(message).matches()) {
-						if(status.equals("paused")) {
-							status = "playing";
-						} else {
-							status = "paused";
-						}
-					} else if(keewihMatch.matches()) {
-						cancion = new Cancion();
-						cancion.nombre = keewihMatch.group(1);
-						cancion.timeLeft = Integer.parseInt(keewihMatch.group(2));
-						queue.add(cancion);
-					} else if(listPattern.matcher(message).matches()) {
-						socket.send("Esta es la lista de canciones en cola:");
-						for(Integer i = 1; queue.size() != 0; i++) {
-							cancion = queue.remove();
-							socket.send("Cancion " + i.toString() + ": " + cancion.nombre + " - largo: " + cancion.timeLeft);
-							auxQueue.add(cancion);
-						}
-						while(auxQueue.size() != 0) {
-							queue.add(auxQueue.remove());
-						}
-						socket.send("Fin lista de canciones.");
-					} else if(nextPattern.matcher(message).matches()) {
+					} else {
+						status = "paused";
+					}
+				} else if (queueAddData != null) {
+					String[] cmdArgs = queueAddData.getArgs();
+					cancion = new Cancion();
+					cancion.nombre = cmdArgs[0];
+					cancion.timeLeft = Integer.parseInt(cmdArgs[1]);
+					queue.add(cancion);
+				} else if (msgMatcher.clientQueueList() != null) {
+					socket.send("Esta es la lista de canciones en cola:");
+					for(int i = 1; queue.size() != 0; i++) {
+						cancion = queue.remove();
+						socket.send("Cancion " + i + ": " + cancion.nombre + " - largo: " + cancion.timeLeft);
+						auxQueue.add(cancion);
+					}
+					while(auxQueue.size() != 0) {
+						queue.add(auxQueue.remove());
+					}
+					socket.send("Fin lista de canciones.");
+				} else if (msgMatcher.clientNext() != null) {
+					if (queue.size() > 0) {
 						cancion = queue.remove();
 						nowPlaying = cancion.nombre;
 						timeLeft = cancion.timeLeft;
 						totalSongTime = cancion.timeLeft;
-					} else if(jumpMatch.matches()) {
-						Integer number = Integer.parseInt(jumpMatch.group(1));
-						if(number == 0) {
-							timeLeft = totalSongTime;
-						} else {
-							if(number < 0){
-								number = queue.size() + 1 - number;
-							}
-							while(number-- > 0) {
-								if(queue.size() > 0){
-									cancion = queue.remove();
-									nowPlaying = cancion.nombre;
-									timeLeft = cancion.timeLeft;
-								}
-								else{
-									status = "stopped";
-								}
-							}
-						}
-					} else if(historyPattern.matcher(message).matches()) {
-						socket.send("Esta es la lista de comandos");
-						for(Integer i = 0; i < history.size(); i++) {
-							socket.send(history.get(i) + "_ID: " + i.toString());
-						}
-						socket.send("Fin lista de comandos.");
-					} else if(disconnectMatch.matches()) {
-						String clientId = disconnectMatch.group(1);
-						String packetId = disconnectMatch.group(2);
+					} else {
+						nowPlaying = null;
+						timeLeft = 0;
+						totalSongTime = 0;
+						status = "stopped";
 					}
-				} else if(connectPattern.matcher(message).matches()) {
-					System.out.println("Recv << " + message);
-					socket.send("CONNECT_CLIENT" + nextClientId++);
+				} else if (jumpData != null) {
+					String[] cmdArgs = jumpData.getArgs();
+					int number = Integer.parseInt(cmdArgs[0]);
+
+					if (number == 0) {
+						timeLeft = totalSongTime;
+					} else {
+						if(number < 0){
+							number = queue.size() + 1 - number;
+						}
+						while(number-- > 0) {
+							if(queue.size() > 0){
+								cancion = queue.remove();
+								nowPlaying = cancion.nombre;
+								timeLeft = cancion.timeLeft;
+							}
+							else{
+								status = "stopped";
+							}
+						}
+					}
+				} else if (msgMatcher.clientHistory() != null) {
+					socket.send("Esta es la lista de comandos");
+					for(int i = 0; i < history.size(); i++) {
+						socket.send(history.get(i) + "_ID: " + i);
+					}
+					socket.send("Fin lista de comandos.");
+				} else if (msgMatcher.clientDisconnect() != null) {
+
 				}
 			}
 
@@ -169,7 +164,7 @@ class Server
 			e.printStackTrace(System.err);
 			System.out.println(e.toString());
 		}
-		
+
 		System.out.println("Hola Vicente");
 	}
 }

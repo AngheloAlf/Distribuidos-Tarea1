@@ -31,9 +31,11 @@ class Client
 			try {
 				while(keepRunning && listenThread.isAlive()) {
 					String comando = input.nextLine();
-					socket.send(ID + "_" + comando + "_ID" + commandId++);
+					String mensaje = ID + "_" + comando + "_ID" + commandId++;
+					socket.send(mensaje);
 					System.out.println("Mensaje enviado");
-					if(comando.equalsIgnoreCase("EXIT")){
+					MessageMatcher msgMatcher = new MessageMatcher(mensaje);
+					if (msgMatcher.clientDisconnect() != null) {
 						listenThread.keepRuning = false;
 						keepRunning = false;
 					}
