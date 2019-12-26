@@ -28,13 +28,19 @@ class Client
 			Scanner input = new Scanner(System.in);
 			Boolean keepRunning = true;
 			Integer commandId = 1;
+			MessageMatcher msgMatcher;
 			try {
 				while(keepRunning && listenThread.isAlive()) {
 					String comando = input.nextLine();
 					String mensaje = ID + "_" + comando + "_ID" + commandId++;
+					msgMatcher = new MessageMatcher(mensaje);
+					if(msgMatcher.queueRawCommand.matcher(comando).matches()) {
+						mensaje = mensaje.replace("QUEUE", "KEEWIH");
+					} else {
+						mensaje = mensaje.replace("QUEUE", "LIST");
+					}
 					socket.send(mensaje);
 					System.out.println("Mensaje enviado");
-					MessageMatcher msgMatcher = new MessageMatcher(mensaje);
 					if (msgMatcher.clientDisconnect() != null) {
 						listenThread.keepRuning = false;
 						keepRunning = false;

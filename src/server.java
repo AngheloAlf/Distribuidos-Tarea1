@@ -58,7 +58,7 @@ class Server
 					} else if (msgMatcher.clientQueueList() != null) {
 						socket.send("Esta es la lista de canciones en cola:");
 						Song[] list = singer.queueList();
-						for (int i = 0; i < list.length; ++i){
+						for (int i = 0; i < list.length; i++){
 							socket.send("Cancion " + (i+1) + ": " + list[i].toString());
 						}
 						socket.send("Fin lista de canciones.");

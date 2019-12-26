@@ -23,6 +23,8 @@ class MessageMatcher
 	public static Pattern historyCommand = Pattern.compile("^(HISTORY)$", Pattern.CASE_INSENSITIVE);
 	public static Pattern disconnectCommand = Pattern.compile("^(EXIT)$", Pattern.CASE_INSENSITIVE);
 
+	public static Pattern queueRawCommand = Pattern.compile("^(QUEUE)_(.+)_([0-9]+)$", Pattern.CASE_INSENSITIVE);
+
 	protected String rawMessage;
 	protected boolean isCommandValid = false;
 	protected String command = "";
