@@ -19,6 +19,22 @@
 
 	make clean
 
+## Para utilizar
+
+	En la consola del cliente se debe escribir el comando seguido por sus argumentos, separados por un guion bajo. A continuacion se muestra para cada caso, con un ejemplo:
+		PLAY_<cancion>_<duracion en segundos>
+			PLAY_Likey - Twice_208
+		STOP
+		PAUSE
+		QUEUE_<cancion>_<duracion en segundos>
+			QUEUE_Signal (from Twice)_197
+		QUEUE
+		NEXT
+		JUMP_<canciones a saltar>
+			JUMP_8
+		HISTORY
+		EXIT
+
 ## Estructura de los mensajes
 
 ### Cliente
